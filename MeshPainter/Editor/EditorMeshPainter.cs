@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
+using System.IO;
+using System.Text;
 
 public class EditorMeshPainter : EditorWindow {
 
@@ -18,7 +20,10 @@ public class EditorMeshPainter : EditorWindow {
     List<Color> _colors;
     Dictionary<Vector3, List<uint>> _realVerts;
     Mesh _currentMesh;
-    bool _onlyAlpha;
+    bool _writeR = true;
+    bool _writeG = true;
+    bool _writeB = true;
+    bool _writeA = true;
     Color _paintColor;
 
     private void SaveMesh()
@@ -66,8 +71,8 @@ public class EditorMeshPainter : EditorWindow {
     void OnSceneGUI(SceneView sceneView)
     {
         if (!enabledTool) return;
-
-        if(isSetMesh())
+        
+        if (isSetMesh())
         {
             foreach (var vert in _realVerts)
             {
@@ -76,14 +81,10 @@ public class EditorMeshPainter : EditorWindow {
                 {
                     foreach(int i in vert.Value)
                     {
-                        if (_onlyAlpha)
-                        {
-                            _colors[i] = new Color(_colors[i].r, _colors[i].g, _colors[i].b, _paintColor.a);
-                        }
-                        else
-                        {
-                            _colors[i] = _paintColor;
-                        }
+                         _colors[i] = new Color(_writeR ? _paintColor.r : _colors[i].r,
+                                                _writeG ? _paintColor.g : _colors[i].g,
+                                                _writeB ? _paintColor.b : _colors[i].b,
+                                                _writeA ? _paintColor.a : _colors[i].a);
                     }
                     _currentMesh.SetColors(_colors);
                     _mf.mesh = _currentMesh;
@@ -105,8 +106,21 @@ public class EditorMeshPainter : EditorWindow {
         }
         if (enabledTool)
         {
+            EditorGUIUtility.labelWidth = 64;
             dotSize = EditorGUILayout.Slider("Dot size", dotSize, 0.001f, 0.2f);
-            _onlyAlpha = EditorGUILayout.Toggle("Paint only alpha", _onlyAlpha);
+            EditorGUILayout.Space();
+
+            EditorGUILayout.LabelField("Color Mask");
+            EditorGUILayout.BeginHorizontal();
+            EditorGUIUtility.labelWidth = 16;
+            _writeR = EditorGUILayout.Toggle("R", _writeR);
+            _writeG = EditorGUILayout.Toggle("G", _writeG);
+            _writeB = EditorGUILayout.Toggle("B", _writeB);
+            _writeA = EditorGUILayout.Toggle("A", _writeA);
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.Space();
+
+            EditorGUIUtility.labelWidth = 128;
             _paintColor = EditorGUILayout.ColorField("Paint vertex color", _paintColor);
             if (isSetMesh() && GUILayout.Button("Paint all"))
             {
