@@ -90,10 +90,6 @@ public class EditorMeshPainter : EditorWindow {
                 }
             }
         }
-
-        Handles.BeginGUI();
-        // Do your drawing here using GUI.
-        Handles.EndGUI();
     }
 
     private void OnInspectorUpdate()
