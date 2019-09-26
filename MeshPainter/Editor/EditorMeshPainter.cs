@@ -110,11 +110,11 @@ public class EditorMeshPainter : EditorWindow {
         m_meshFilter.mesh = m_currentMesh;
     }
 
-    void IfNoObjectSelectedShowInfo()
+    bool CheckIfNoObjectSelectedAndShowInfo()
     {
-        if (IsMeshSet() || IsGameObjectWithMeshSelected()) return;
+        if (IsMeshSet() || IsGameObjectWithMeshSelected()) return false;
         EditorGUILayout.HelpBox("Select object with mesh you want to edit", MessageType.Info);
-        EditorGUIUtility.ExitGUI();
+        return true;
     }
 
     bool IsGameObjectWithMeshSelected()
@@ -173,7 +173,10 @@ public class EditorMeshPainter : EditorWindow {
 
     private void OnGUI()
     {
-        IfNoObjectSelectedShowInfo();
+        if(CheckIfNoObjectSelectedAndShowInfo())
+        {
+            return;
+        }
 
         HandleEnableMeshEditButton();
 
