@@ -6,45 +6,44 @@ using System.IO;
 
 public class EditorMeshPainter : EditorWindow {
 
+    class ColorMask
+    {
+        public bool isR = true;
+        public bool isG = true;
+        public bool isB = true;
+        public bool isA = true;
+
+        public Color FilterColor(Color original, Color newColor)
+        {
+            return new Color(isR ? newColor.r : original.r,
+                             isG ? newColor.g : original.g,
+                             isB ? newColor.b : original.b,
+                             isA ? newColor.a : original.a);
+        }
+    }
+
     [MenuItem("Tools/MeshPainter")]
     public static void ShowWindow()
     {
         GetWindow<EditorMeshPainter>("MeshPainter");
     }
+    
+    float m_dotSize = 0.05f;
+    MeshFilter m_meshFilter;
+    List<Color> m_colors;
+    Dictionary<Vector3, List<uint>> m_realVerts;
+    Mesh m_currentMesh;
+    ColorMask m_colorMask = new ColorMask();
+    Color m_paintColor;
 
-    bool enabledTool;
-    float dotSize = 0.05f;
-    GameObject _currentObject;
-    MeshFilter _mf;
-    List<Color> _colors;
-    Dictionary<Vector3, List<uint>> _realVerts;
-    Mesh _currentMesh;
-    bool _writeR = true;
-    bool _writeG = true;
-    bool _writeB = true;
-    bool _writeA = true;
-    Color _paintColor;
+    const float minVisualAlpa = 0.3f;
 
     private void SaveMesh()
     {
-        if (!AssetDatabase.IsValidFolder("Assets/MeshPainter/Models/"))
-        {
-            AssetDatabase.CreateFolder("Assets/", "MeshPainter/Models/");
-        }
-        int i = 0;
-        string name;
-        do
-        {
-            name = _currentMesh.name + ((i != 0) ? " " + i: "");
-            if(!File.Exists(Application.dataPath + "/MeshPainter/Models/" + name + ".asset"))
-            {
-                break;
-            }
-        }
-        while (i++ < 100);
-        AssetDatabase.CreateAsset(_currentMesh, "Assets/MeshPainter/Models/" + name + ".asset");
+        string path = EditorUtility.SaveFilePanelInProject("Choose Location for Mesh to save", m_currentMesh.name, "asset", "Save your mesh");
+        AssetDatabase.CreateAsset(m_currentMesh, path);
         AssetDatabase.Refresh();
-        _mf.mesh = AssetDatabase.LoadAssetAtPath("Assets/MeshPainter/Models/" + name + ".asset", typeof(Mesh)) as Mesh;
+        m_meshFilter.mesh = AssetDatabase.LoadAssetAtPath(path, typeof(Mesh)) as Mesh;
     }
 
     // Window has been selected
@@ -55,7 +54,6 @@ public class EditorMeshPainter : EditorWindow {
         SceneView.onSceneGUIDelegate -= this.OnSceneGUI;
         // Add (or re-add) the delegate.
         SceneView.onSceneGUIDelegate += this.OnSceneGUI;
-        SelectObject();
 
     }
 
@@ -69,143 +67,156 @@ public class EditorMeshPainter : EditorWindow {
 
     void OnSceneGUI(SceneView sceneView)
     {
-        if (!enabledTool) return;
-        
-        if (isSetMesh())
+        if (IsMeshSet())
         {
-            foreach (var vert in _realVerts)
+            foreach (var vert in m_realVerts)
             {
-                Vector3 pos = _currentObject.transform.localToWorldMatrix.MultiplyPoint3x4(vert.Key);
-                if (Handles.Button(pos, Quaternion.identity, dotSize, dotSize, Handles.DotHandleCap))
+                Vector3 pos = m_meshFilter.transform.localToWorldMatrix.MultiplyPoint3x4(vert.Key);
+                if (vert.Value.Count <= 0) continue;
+                Color col = m_colors[(int)vert.Value[0]];
+                Handles.color = new Color(col.r, col.g, col.b, Mathf.Max(minVisualAlpa, col.a));
+                if (Handles.Button(pos, Quaternion.identity, m_dotSize, m_dotSize, Handles.DotHandleCap))
                 {
                     foreach(int i in vert.Value)
                     {
-                         _colors[i] = new Color(_writeR ? _paintColor.r : _colors[i].r,
-                                                _writeG ? _paintColor.g : _colors[i].g,
-                                                _writeB ? _paintColor.b : _colors[i].b,
-                                                _writeA ? _paintColor.a : _colors[i].a);
+                        m_colors[i] = m_colorMask.FilterColor(m_colors[i], m_paintColor);
                     }
-                    _currentMesh.SetColors(_colors);
-                    _mf.mesh = _currentMesh;
+                    m_currentMesh.SetColors(m_colors);
+                    m_meshFilter.mesh = m_currentMesh;
                 }
             }
+            Handles.color = Color.white;
         }
     }
 
-    private void OnInspectorUpdate()
+    private void ColorAllVertices()
     {
-        //Handles.Button(Camera.main.transform.position, Quaternion.identity, 10, 20, Handles.ConeHandleCap);
-    }
-
-    private void OnGUI()
-    {
-        if(GUILayout.Button(enabledTool?"Disable Tool":"Enable Tool"))
+        if (m_colors.Count != m_currentMesh.vertexCount)
         {
-            enabledTool = !enabledTool;
-        }
-        if (enabledTool)
-        {
-            EditorGUIUtility.labelWidth = 64;
-            dotSize = EditorGUILayout.Slider("Dot size", dotSize, 0.001f, 0.2f);
-            EditorGUILayout.Space();
-
-            EditorGUILayout.LabelField("Color Mask");
-            EditorGUILayout.BeginHorizontal();
-            EditorGUIUtility.labelWidth = 16;
-            _writeR = EditorGUILayout.Toggle("R", _writeR);
-            _writeG = EditorGUILayout.Toggle("G", _writeG);
-            _writeB = EditorGUILayout.Toggle("B", _writeB);
-            _writeA = EditorGUILayout.Toggle("A", _writeA);
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.Space();
-
-            EditorGUIUtility.labelWidth = 128;
-            _paintColor = EditorGUILayout.ColorField("Paint vertex color", _paintColor);
-            if (isSetMesh() && GUILayout.Button("Paint all"))
+            m_colors = new List<Color>(m_currentMesh.vertexCount);
+            for (int i = 0; i < m_currentMesh.vertexCount; ++i)
             {
-                if (_colors.Count != _currentMesh.vertexCount)
-                {
-                    _colors = new List<Color>(_currentMesh.vertexCount);
-                    for (int i = 0; i < _currentMesh.vertexCount; ++i)
-                    {
-                        _colors.Add(_paintColor);
-                    }
-                }
-                else
-                {
-                    for (int i = 0; i < _currentMesh.vertexCount; ++i)
-                    {
-                        _colors[i] = _paintColor;
-                    }
-                }
-                _currentMesh.SetColors(_colors);
-                _mf.mesh = _currentMesh;
-            }
-            if (isSetMesh() && GUILayout.Button("Save mesh"))
-            {
-                SaveMesh();
-            }
-        }
-    }
-
-    private bool isSetMesh()
-    {
-        return (null != _realVerts && _currentObject && _currentMesh && _mf);
-    }
-
-    private void SetMesh()
-    {
-        _currentObject = Selection.activeGameObject;
-        if (_currentObject && _currentObject.GetComponent<MeshFilter>())
-        {
-            _mf = _currentObject.GetComponent<MeshFilter>();
-            string name = _mf.sharedMesh.name;
-            Mesh meshCopy = Mesh.Instantiate(_mf.sharedMesh) as Mesh;
-            meshCopy.name = ((_mf.sharedMesh.name.Substring(0,3).CompareTo("mp_")==0)?"":"mp_") + name;
-            _currentMesh = meshCopy;
-            _colors = new List<Color>(_currentMesh.vertexCount);
-            _currentMesh.GetColors(_colors);
-            _realVerts = new Dictionary<Vector3, List<uint>>();
-            for (uint i = 0; i < _currentMesh.vertexCount; ++i)
-            {
-                if (i >= _colors.Count)
-                {
-                    _colors.Add(Color.white);
-                }
-                Vector3 currentVec = _currentMesh.vertices[i];
-                if (_realVerts.ContainsKey(currentVec))
-                {
-                    _realVerts[currentVec].Add(i);
-                }
-                else
-                {
-                    _realVerts.Add(currentVec, new List<uint>() { i });
-                }
+                m_colors.Add(m_paintColor);
             }
         }
         else
         {
-            _realVerts = null;
-            _mf = null;
-            _currentMesh = null;
-            _colors = null;
+            for (int i = 0; i < m_currentMesh.vertexCount; ++i)
+            {
+                m_colors[i] = m_colorMask.FilterColor(m_colors[i], m_paintColor);
+            }
+        }
+        m_currentMesh.SetColors(m_colors);
+        m_meshFilter.mesh = m_currentMesh;
+    }
+
+    void IfNoObjectSelectedShowInfo()
+    {
+        if (IsMeshSet() || IsGameObjectWithMeshSelected()) return;
+        EditorGUILayout.HelpBox("Select object with mesh you want to edit", MessageType.Info);
+        EditorGUIUtility.ExitGUI();
+    }
+
+    bool IsGameObjectWithMeshSelected()
+    {
+        GameObject obj = Selection.activeGameObject;
+        if (obj == null) return false;
+        MeshFilter filter = obj.GetComponent<MeshFilter>();
+        if (filter == null) return false;
+        return (filter.sharedMesh != null);
+    }
+
+    void HandleEnableMeshEditButton()
+    {
+        if (GUILayout.Button(IsMeshSet() ? "Stop editing mesh" : "Edit mesh"))
+        {
+            if(!IsMeshSet())
+            {
+                SetMesh();
+            }
+            else
+            {
+                ClearMem();
+            }
         }
     }
 
-    private void ClearMem()
+    void ShowEditMeshGUI()
     {
-        _realVerts = null;
-        _currentObject = null;
-        _mf = null;
-        _currentMesh = null;
-        _colors = null;
+        EditorGUILayout.Space();
+
+        EditorGUIUtility.labelWidth = 64;
+        m_dotSize = EditorGUILayout.Slider("Dot size", m_dotSize, 0.001f, 0.2f);
+        EditorGUILayout.Space();
+
+        EditorGUILayout.LabelField("Color Mask");
+        EditorGUILayout.BeginHorizontal();
+        EditorGUIUtility.labelWidth = 16;
+        m_colorMask.isR = EditorGUILayout.Toggle("R", m_colorMask.isR);
+        m_colorMask.isG = EditorGUILayout.Toggle("G", m_colorMask.isG);
+        m_colorMask.isB = EditorGUILayout.Toggle("B", m_colorMask.isB);
+        m_colorMask.isA = EditorGUILayout.Toggle("A", m_colorMask.isA);
+        EditorGUILayout.EndHorizontal();
+        EditorGUILayout.Space();
+
+        EditorGUIUtility.labelWidth = 128;
+        m_paintColor = EditorGUILayout.ColorField("Paint vertex color", m_paintColor);
+        if (IsMeshSet() && GUILayout.Button("Paint all"))
+        {
+            ColorAllVertices();
+        }
+        if (IsMeshSet() && GUILayout.Button("Save mesh"))
+        {
+            SaveMesh();
+        }
     }
 
-    private void SelectObject()
+    private void OnGUI()
     {
-        if (enabledTool)
+        IfNoObjectSelectedShowInfo();
+
+        HandleEnableMeshEditButton();
+
+        if(IsMeshSet())
         {
-            SetMesh();
+            ShowEditMeshGUI();
+        }
+    }
+
+    private bool IsMeshSet()
+    {
+        return (null != m_realVerts && m_currentMesh && m_meshFilter);
+    }
+
+    private void SetMesh()
+    {
+        GameObject currentObject = Selection.activeGameObject;
+        if (currentObject && currentObject.GetComponent<MeshFilter>())
+        {
+            m_meshFilter = currentObject.GetComponent<MeshFilter>();
+            string name = m_meshFilter.sharedMesh.name;
+            Mesh meshCopy = Mesh.Instantiate(m_meshFilter.sharedMesh) as Mesh;
+            meshCopy.name = ((m_meshFilter.sharedMesh.name.Substring(0,3).CompareTo("mp_")==0)?"":"mp_") + name;
+            m_currentMesh = meshCopy;
+            m_colors = new List<Color>(m_currentMesh.vertexCount);
+            m_currentMesh.GetColors(m_colors);
+            m_realVerts = new Dictionary<Vector3, List<uint>>();
+            for (uint i = 0; i < m_currentMesh.vertexCount; ++i)
+            {
+                if (i >= m_colors.Count)
+                {
+                    m_colors.Add(Color.white);
+                }
+                Vector3 currentVec = m_currentMesh.vertices[i];
+                if (m_realVerts.ContainsKey(currentVec))
+                {
+                    m_realVerts[currentVec].Add(i);
+                }
+                else
+                {
+                    m_realVerts.Add(currentVec, new List<uint>() { i });
+                }
+            }
         }
         else
         {
@@ -213,8 +224,11 @@ public class EditorMeshPainter : EditorWindow {
         }
     }
 
-    private void OnSelectionChange()
+    private void ClearMem()
     {
-        SelectObject();
+        m_realVerts = null;
+        m_meshFilter = null;
+        m_currentMesh = null;
+        m_colors = null;
     }
 }
