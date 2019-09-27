@@ -145,7 +145,7 @@ namespace ShadedTechnology.MeshPainter
         }
 
         // Window has been selected
-        void OnFocus()
+        private void OnFocus()
         {
             // Remove delegate listener if it has previously
             // been assigned.
@@ -155,7 +155,7 @@ namespace ShadedTechnology.MeshPainter
 
         }
 
-        void OnDestroy()
+        private void OnDestroy()
         {
             // When the window is destroyed, remove the delegate
             // so that it will no longer do any drawing.
@@ -163,24 +163,29 @@ namespace ShadedTechnology.MeshPainter
             ClearMem();
         }
 
-        void OnSceneGUI(SceneView sceneView)
+        private void OnSceneGUI(SceneView sceneView)
         {
             if (IsMeshSet())
             {
-                foreach (VertexColor vertexColor in m_vertexColors)
-                {
-                    Vector3 pos = vertexColor.GetPosition(m_meshFilter.transform.localToWorldMatrix);
-                    Color col = vertexColor.GetColor();
-                    Handles.color = new Color(col.r, col.g, col.b, Mathf.Max(minVisualAlpa, col.a));
-                    if (Handles.Button(pos, Quaternion.identity, m_dotSize, m_dotSize, Handles.DotHandleCap))
-                    {
-                        vertexColor.SetColorWithMask(m_colorMask, m_paintColor);
-                        m_currentMesh.SetColors(m_vertexColors.GetColors());
-                        m_meshFilter.mesh = m_currentMesh;
-                    }
-                }
-                Handles.color = Color.white;
+                HandleSceneVertexPainting();
             }
+        }
+
+        private void HandleSceneVertexPainting()
+        {
+            foreach (VertexColor vertexColor in m_vertexColors)
+            {
+                Vector3 pos = vertexColor.GetPosition(m_meshFilter.transform.localToWorldMatrix);
+                Color col = vertexColor.GetColor();
+                Handles.color = new Color(col.r, col.g, col.b, Mathf.Max(minVisualAlpa, col.a));
+                if (Handles.Button(pos, Quaternion.identity, m_dotSize, m_dotSize, Handles.DotHandleCap))
+                {
+                    vertexColor.SetColorWithMask(m_colorMask, m_paintColor);
+                    m_currentMesh.SetColors(m_vertexColors.GetColors());
+                    m_meshFilter.mesh = m_currentMesh;
+                }
+            }
+            Handles.color = Color.white;
         }
 
         private void ColorAllVertices()
@@ -192,82 +197,6 @@ namespace ShadedTechnology.MeshPainter
 
             m_currentMesh.SetColors(m_vertexColors.GetColors());
             m_meshFilter.mesh = m_currentMesh;
-        }
-
-        bool CheckIfNoObjectSelectedAndShowInfo()
-        {
-            if (IsMeshSet() || IsGameObjectWithMeshSelected()) return false;
-            EditorGUILayout.HelpBox("Select object with mesh you want to edit", MessageType.Info);
-            return true;
-        }
-
-        bool IsGameObjectWithMeshSelected()
-        {
-            GameObject obj = Selection.activeGameObject;
-            if (obj == null) return false;
-            MeshFilter filter = obj.GetComponent<MeshFilter>();
-            if (filter == null) return false;
-            return (filter.sharedMesh != null);
-        }
-
-        void HandleEnableMeshEditButton()
-        {
-            if (GUILayout.Button(IsMeshSet() ? "Stop editing mesh" : "Edit mesh"))
-            {
-                if (!IsMeshSet())
-                {
-                    SetMesh();
-                }
-                else
-                {
-                    ClearMem();
-                }
-            }
-        }
-
-        void ShowEditMeshGUI()
-        {
-            EditorGUILayout.Space();
-
-            EditorGUIUtility.labelWidth = 64;
-            m_dotSize = EditorGUILayout.Slider("Dot size", m_dotSize, 0.001f, 0.2f);
-            EditorGUILayout.Space();
-
-            EditorGUILayout.LabelField("Color Mask");
-            EditorGUILayout.BeginHorizontal();
-            EditorGUIUtility.labelWidth = 16;
-            m_colorMask.isR = EditorGUILayout.Toggle("R", m_colorMask.isR);
-            m_colorMask.isG = EditorGUILayout.Toggle("G", m_colorMask.isG);
-            m_colorMask.isB = EditorGUILayout.Toggle("B", m_colorMask.isB);
-            m_colorMask.isA = EditorGUILayout.Toggle("A", m_colorMask.isA);
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.Space();
-
-            EditorGUIUtility.labelWidth = 128;
-            m_paintColor = EditorGUILayout.ColorField("Paint vertex color", m_paintColor);
-            if (IsMeshSet() && GUILayout.Button("Paint all"))
-            {
-                ColorAllVertices();
-            }
-            if (IsMeshSet() && GUILayout.Button("Save mesh"))
-            {
-                SaveMesh();
-            }
-        }
-
-        private void OnGUI()
-        {
-            if (CheckIfNoObjectSelectedAndShowInfo())
-            {
-                return;
-            }
-
-            HandleEnableMeshEditButton();
-
-            if (IsMeshSet())
-            {
-                ShowEditMeshGUI();
-            }
         }
 
         private bool IsMeshSet()
@@ -298,6 +227,104 @@ namespace ShadedTechnology.MeshPainter
             m_vertexColors = null;
             m_meshFilter = null;
             m_currentMesh = null;
+        }
+
+        private bool CheckIfNoObjectSelectedAndShowInfo()
+        {
+            if (IsMeshSet() || IsGameObjectWithMeshSelected()) return false;
+            EditorGUILayout.HelpBox("Select object with mesh you want to edit", MessageType.Info);
+            return true;
+        }
+
+        private bool IsGameObjectWithMeshSelected()
+        {
+            GameObject obj = Selection.activeGameObject;
+            if (obj == null) return false;
+            MeshFilter filter = obj.GetComponent<MeshFilter>();
+            if (filter == null) return false;
+            return (filter.sharedMesh != null);
+        }
+
+        private void HandleEnableMeshEditButton()
+        {
+            if (GUILayout.Button(IsMeshSet() ? "Stop editing mesh" : "Edit mesh"))
+            {
+                if (!IsMeshSet())
+                {
+                    SetMesh();
+                }
+                else
+                {
+                    ClearMem();
+                }
+            }
+        }
+
+        private void ShowDotSizeSliderGUI()
+        {
+            EditorGUIUtility.labelWidth = 64;
+            m_dotSize = EditorGUILayout.Slider("Dot size", m_dotSize, 0.001f, 0.2f);
+        }
+
+        private void ShowColorMaskGUI()
+        {
+            EditorGUILayout.LabelField("Color Mask");
+            EditorGUILayout.BeginHorizontal();
+            EditorGUIUtility.labelWidth = 16;
+            m_colorMask.isR = EditorGUILayout.Toggle("R", m_colorMask.isR);
+            m_colorMask.isG = EditorGUILayout.Toggle("G", m_colorMask.isG);
+            m_colorMask.isB = EditorGUILayout.Toggle("B", m_colorMask.isB);
+            m_colorMask.isA = EditorGUILayout.Toggle("A", m_colorMask.isA);
+            EditorGUILayout.EndHorizontal();
+        }
+
+        private void ShowPaintColorGUI()
+        {
+            EditorGUIUtility.labelWidth = 128;
+            m_paintColor = EditorGUILayout.ColorField("Paint vertex color", m_paintColor);
+        }
+
+        private void ShowPaintAllButtonGUI()
+        {
+            if (IsMeshSet() && GUILayout.Button("Paint all"))
+            {
+                ColorAllVertices();
+            }
+        }
+
+        private void ShowSaveMeshButtonGUI()
+        {
+            if (IsMeshSet() && GUILayout.Button("Save mesh"))
+            {
+                SaveMesh();
+            }
+        }
+
+        private void ShowEditMeshGUI()
+        {
+            EditorGUILayout.Space();
+            ShowDotSizeSliderGUI();
+            EditorGUILayout.Space();
+            ShowColorMaskGUI();
+            EditorGUILayout.Space();
+            ShowPaintColorGUI();
+            ShowPaintAllButtonGUI();
+            ShowSaveMeshButtonGUI();
+        }
+
+        private void OnGUI()
+        {
+            if (CheckIfNoObjectSelectedAndShowInfo())
+            {
+                return;
+            }
+
+            HandleEnableMeshEditButton();
+
+            if (IsMeshSet())
+            {
+                ShowEditMeshGUI();
+            }
         }
     }
 }
