@@ -1,7 +1,9 @@
 # MeshPainter
 Simple tool for Unity to paint vertex colors on meshes
 
-![alt text](https://github.com/ShadedTechnology/MeshPainter/blob/master/ReadMeResources/meshPainterExample.PNG)
+<p align="center">
+  <img src="https://github.com/ShadedTechnology/MeshPainter/blob/master/ReadMeResources/meshPainterExample.PNG">
+</p>
 
 ## Warning
 
